@@ -1,0 +1,89 @@
+Create SSL Secure connection with MQTT
+----------------------------------------
+
+What Does MQTT Security Mean?
+By its nature, MQTT is a plain protocol. All the information exchanged is in plain-text format. In other words, anyone could access to this message and read the payload. Of course, there are several use cases where we want to keep information private and guarantee that it cannot be read or modified during the transmitting process. In this case, there are several approaches we can use to face the MQTT security problem:
+
+1. Create a VPN between the clients and the server.
+2. Use MQTT over SSL/TSL to encrypt and secure the information between the MQTT clients and MQTT broker.
+
+We will focus our attention on how to create an MQTT over SSL. To make MQTT a secure protocol, we have to follow these steps:
+
+1. Create a private key (CA Key).
+2. Generate a certificate using the private key (CA cert).
+3. Create a certificate for Mosquitto MQTT server with the key.
+
+The final step is configuring Mosquitto MQTT so that it uses these certificates.
+
+
+Before creating the private key, you should create a directory where you store all the certificates you will create. In the terminal, write:
+
+"""
+openssl genrsa -out mosq-ca.key 2048
+"""
+
+
+The next step is creating an X509 certificate that uses the private key generated in the previous step. Open the terminal again and, in the same directory you used to store the private key, write:
+
+"""
+openssl req -new -x509 -days 365 -key mosq-ca.key -out mosq-ca.crt
+"""
+
+
+Creating the MQTT Server Certificate
+
+Once the private key and the certificate are ready, we can move on and create the MQTT server certificate and private key:
+
+"""
+openssl genrsa -out mosq-serv.key 2048
+"""
+
+Then the server certificate. During this step, we have to create a CSR (Certificate Signing Request). This certificate should be sent to the Certification authority that, after verifying the author identity, returns a certificate. In this tutorial, we will use a self-signed certificate:
+
+"""
+openssl req -new -key mosq-serv.key -out mosq-serv.csr
+"""
+
+As you can see, we have used the private key generated in the step before. Finally, we can create the certificate to use in our MQTT Mosquitto Server:
+
+"""
+openssl x509 -req -in mosq-serv.csr -CA mosq-ca.crt -CAkey mosq-ca.key -CAcreateserial -out mosq-serv.crt -days 365 -sha256
+"""
+
+All done! We have completed the steps necessary to secure our MQTT server. You can verify your certificate:
+
+"""
+openssl x509 -in mosq-serv.crt -noout -text
+"""
+
+
+"etc/mosquitto.conf" file that holds all the configuration parameters and add the following lines:
+
+1 listener 8883
+2 cafile /home/pi/ssl-cert-mosq/mosq-ca.crt
+3 certfile /home/pi/ssl-cert-mosq/mosq-serv.crt
+4 keyfile /home/pi/ssl-cert-mosq/mosq-serv.key
+
+Now you have to stop and restart Mosquitto MQTT so that it can read the new configuration file:
+
+1 sudo service mosquitto stop
+2 sudo service mosquitto start
+
+
+
+To send message
+
+mosquitto_pub -p <port> -t <topic> --cafile <ca file>.crt -m "<msg>" -d -h <ip> --insecure
+
+Ex-
+mosquitto_pub -p 8883 -t "test" --cafile mosq-ca.crt -m "Hello MQTT! Now on secure mode" -d -h 192.168.0.7 --insecure
+
+To Subscribe
+mosquitto_sub -p <port> -t <topic> --cafile <ca file>.crt -d -h <ip> --insecure
+
+Ex-
+mosquitto_sub -p 8883 -t "test" --cafile mosq-ca.crt -d -h 192.168.0.7 --insecure
+
+
+Ref.
+https://dzone.com/articles/mqtt-security-securing-a-mosquitto-server
